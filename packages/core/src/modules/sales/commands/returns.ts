@@ -346,8 +346,16 @@ const createReturnCommand: CommandHandler<ReturnCreateInput, { returnId: string 
         if (!line) return
         const quantity = lineInput.quantity
         const lineQuantity = Math.max(toNumeric(line.quantity), 0)
-        const unitNet = lineQuantity > 0 ? toNumeric(line.totalNetAmount) / lineQuantity : toNumeric(line.unitPriceNet)
-        const unitGross = lineQuantity > 0 ? toNumeric(line.totalGrossAmount) / lineQuantity : toNumeric(line.unitPriceGross)
+        const lineTotalNet = toNumeric(line.totalNetAmount)
+        const lineTotalGross = toNumeric(line.totalGrossAmount)
+        // Derive the per-unit credit from the line's stored totals (which already
+        // include line-level discounts). Fall back to the unit prices whenever the
+        // stored total is missing or non-positive — net and gross are derived
+        // independently, so a line persisted with a zeroed net total (but a valid
+        // gross/unit price) must still credit the return's net amount. Otherwise
+        // the net total freezes while the gross total keeps decreasing (#3036).
+        const unitNet = lineQuantity > 0 && lineTotalNet > 0 ? lineTotalNet / lineQuantity : toNumeric(line.unitPriceNet)
+        const unitGross = lineQuantity > 0 && lineTotalGross > 0 ? lineTotalGross / lineQuantity : toNumeric(line.unitPriceGross)
         const totalNet = -round(Math.max(unitNet, 0) * quantity)
         const totalGross = -round(Math.max(unitGross, 0) * quantity)
 
